@@ -129,8 +129,12 @@ jobs:
             echo "Using signed Release APK: ${SIGNED_RELEASE_APK}"
             echo "apk=${SIGNED_RELEASE_APK}" >> "$GITHUB_OUTPUT"
           else
-            PREVIEW_APK="app/build/outputs/apk/debug/app-debug.apk"
-            test -f "${PREVIEW_APK}"
+            PREVIEW_APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+            if [ -z "${PREVIEW_APK}" ]; then
+              echo "No Debug APK found. Generated files:"
+              find app/build/outputs/apk -maxdepth 2 -type f -print
+              exit 1
+            fi
             echo "No signing key available; using Debug APK for preview: ${PREVIEW_APK}"
             echo "apk=${PREVIEW_APK}" >> "$GITHUB_OUTPUT"
           fi
