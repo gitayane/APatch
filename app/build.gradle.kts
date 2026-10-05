@@ -21,7 +21,13 @@ val androidTargetSdkVersion: Int = rootProject.extra["androidTargetSdkVersion"] 
 val managerVersionCode: Int = rootProject.extra["managerVersionCode"] as Int
 val managerVersionName: String = rootProject.extra["managerVersionName"] as String
 val branchName: String = rootProject.extra["branchName"] as String
-val kernelPatchVersion: String = rootProject.extra["kernelPatchVersion"] as String
+val kernelPatchVersion: String = run {
+    val header = rootProject.file("app/src/main/cpp/version").readText()
+    fun part(name: String) = Regex("""#define $name (\\d+)""")
+        .find(header)?.groupValues?.get(1)
+        ?: error("$name not found in app/src/main/cpp/version")
+    "${part("MAJOR")}.${part("MINOR")}.${part("PATCH")}"
+}
 
 // XZP-compatible KernelPatch assets are pinned at build time. Keep these
 // local to the app module so the upstream root extra-property contract remains unchanged.
