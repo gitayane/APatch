@@ -22,6 +22,8 @@ val managerVersionCode: Int = rootProject.extra["managerVersionCode"] as Int
 val managerVersionName: String = rootProject.extra["managerVersionName"] as String
 val branchName: String = rootProject.extra["branchName"] as String
 val kernelPatchVersion: String = rootProject.extra["kernelPatchVersion"] as String
+val kernelPatchRepository: String = rootProject.extra["kernelPatchRepository"] as String
+val kernelPatchReleaseTag: String = rootProject.extra["kernelPatchReleaseTag"] as String
 
 apksign {
     storeFileProperty = "KEYSTORE_FILE"
@@ -237,14 +239,14 @@ fun downloadFileRetry(url: String, destFile: File, maxRetries: Int = 5) {
 
 registerDownloadTask(
     taskName = "downloadKpimg",
-    srcUrl = "https://github.com/bmax121/KernelPatch/releases/download/$kernelPatchVersion/kpimg-android",
+    srcUrl = "https://github.com/$kernelPatchRepository/releases/download/$kernelPatchReleaseTag/kpimg-android",
     destPath = "${project.projectDir}/src/main/assets/kpimg",
     project = project
 )
 
 registerDownloadTask(
     taskName = "downloadKptools",
-    srcUrl = "https://github.com/bmax121/KernelPatch/releases/download/$kernelPatchVersion/kptools-android",
+    srcUrl = "https://github.com/$kernelPatchRepository/releases/download/$kernelPatchReleaseTag/kptools-android",
     destPath = "${project.projectDir}/libs/arm64-v8a/libkptools.so",
     project = project
 )
@@ -271,7 +273,7 @@ tasks.register("downloadJailbreakKo") {
         assetsDir.mkdirs()
         jailbreakKmis.forEach { kmi ->
             val srcUrl =
-                "https://github.com/bmax121/KernelPatch/releases/download/$kernelPatchVersion/${kmi}_kernelpatch.ko"
+                "https://github.com/$kernelPatchRepository/releases/download/$kernelPatchReleaseTag/${kmi}_kernelpatch.ko"
             val destFile = File(assetsDir, "${kmi}_kernelpatch.ko")
             if (!destFile.exists()) {
                 println(" - Downloading $srcUrl to ${destFile.absolutePath}")
