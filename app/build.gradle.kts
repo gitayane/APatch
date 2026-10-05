@@ -23,7 +23,7 @@ val managerVersionName: String = rootProject.extra["managerVersionName"] as Stri
 val branchName: String = rootProject.extra["branchName"] as String
 val kernelPatchVersion: String = run {
     val header = rootProject.file("app/src/main/cpp/version").readText()
-    fun part(name: String) = Regex("""#define $name (\\d+)""")
+    fun part(name: String) = Regex("""#define $name (\d+)""")
         .find(header)?.groupValues?.get(1)
         ?: error("$name not found in app/src/main/cpp/version")
     "${part("MAJOR")}.${part("MINOR")}.${part("PATCH")}"
