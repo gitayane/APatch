@@ -7,6 +7,7 @@ plugins {
 // app/src/main/cpp/version is the single source of the KernelPatch version;
 // apd/build.rs derives its copy from it as well.
 project.ext.set("kernelPatchVersion", getKernelPatchVersion())
+project.ext.set("kernelPatchReleaseTag", getKernelPatchReleaseTag())
 
 extra.set("androidMinSdkVersion", 26)
 extra.set("androidTargetSdkVersion", 36)
@@ -34,6 +35,10 @@ fun getVersionCode(): Int {
     }
     val epoch = props.getProperty("managerVersionEpoch").toInt()
     return epoch + getGitCommitCount()
+}
+
+fun getKernelPatchReleaseTag(): String {
+    return File(rootDir, "app/src/main/cpp/release").readText().trim()
 }
 
 fun getKernelPatchVersion(): String {
