@@ -217,6 +217,7 @@
     <string name="enable_web_debugging_summary">Can be used to debug WebUI. Please enable only when needed.</string>
 
     <string name="home_new_apatch_found">New version %s is available, click to upgrade.</string>
+    <string name="kernelpatch_update_download_failed">Failed to download the latest KernelPatch. The bundled version will be used.</string>
 
     <string name="mode_select_page_title">Install</string>
     <string name="mode_select_page_patch_and_install">Patch and install</string>
