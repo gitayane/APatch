@@ -165,7 +165,23 @@ jobs:
             done
           fi
 
-      - name: Release apk
+      - name: Release preview apk
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        if: ${{ env.SIGNING_KEY != '' && github.event_name == 'workflow_dispatch' }}
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
+          name: APatch ${{ steps.parse_version.outputs.VERSION }} Preview #${{ github.run_number }}
+          artifacts: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          generateReleaseNotes: false
+          prerelease: true
+          makeLatest: false
+          replacesArtifacts: true
+
+      - name: Release stable apk
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' }}
@@ -174,7 +190,8 @@ jobs:
         with:
           token: ${{ github.token }}
           tag: ${{ steps.parse_version.outputs.VERSION }}
-          artifacts: ${{steps.sign_app.outputs.signedReleaseFile}}
+          artifacts: ${{ steps.sign_app.outputs.signedReleaseFile }}
           generateReleaseNotes: true
+          prerelease: false
           makeLatest: true
           replacesArtifacts: true
