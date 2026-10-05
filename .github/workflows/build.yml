@@ -118,6 +118,23 @@ jobs:
           echo "signedReleaseFiles=$SIGNED" >> "$GITHUB_OUTPUT"
           echo "nofSignedReleaseFiles=1" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare preview APK
+        id: preview_apk
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          SIGNED_RELEASE_APK: ${{ steps.sign_app.outputs.signedReleaseFile }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SIGNED_RELEASE_APK}" ] && [ -f "${SIGNED_RELEASE_APK}" ]; then
+            echo "Using signed Release APK: ${SIGNED_RELEASE_APK}"
+            echo "apk=${SIGNED_RELEASE_APK}" >> "$GITHUB_OUTPUT"
+          else
+            PREVIEW_APK="app/build/outputs/apk/debug/app-debug.apk"
+            test -f "${PREVIEW_APK}"
+            echo "No signing key available; using Debug APK for preview: ${PREVIEW_APK}"
+            echo "apk=${PREVIEW_APK}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload mappings
         uses: actions/upload-artifact@v7
         with:
@@ -166,16 +183,14 @@ jobs:
           fi
 
       - name: Release preview apk
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ env.SIGNING_KEY != '' && github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
           token: ${{ github.token }}
           tag: preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
           name: APatch ${{ steps.parse_version.outputs.VERSION }} Preview #${{ github.run_number }}
-          artifacts: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          artifacts: ${{ steps.preview_apk.outputs.apk }}
           generateReleaseNotes: false
           prerelease: true
           makeLatest: false
