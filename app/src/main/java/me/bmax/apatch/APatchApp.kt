@@ -221,10 +221,10 @@ class APApplication : Application(), Thread.UncaughtExceptionHandler {
                         kernelPatchNeedsUpdate = true
                     }
 
-                    // Check our custom KernelPatch release channel. A release tag,
-                    // rather than only the numeric KP version, distinguishes builds
-                    // such as 0.13.9-xzp1 from upstream 0.13.9.
-                    KernelPatchUpdate.latestRelease()?.let { latest ->
+                    // Check our custom KernelPatch prerelease channel. A release tag,
+                    // rather than only the numeric KP version, distinguishes test
+                    // builds from the stable bundled release.
+                    KernelPatchUpdate.latestPrerelease()?.let { latest ->
                         if (latest.tag != currentReleaseTag) {
                             kernelPatchNeedsUpdate = true
                             Log.d(TAG, "new KernelPatch release available: ${latest.tag}")
