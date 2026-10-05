@@ -28,6 +28,7 @@ import me.bmax.apatch.APApplication
 import me.bmax.apatch.BuildConfig
 import me.bmax.apatch.R
 import me.bmax.apatch.apApp
+import me.bmax.apatch.util.KernelPatchUpdate
 import me.bmax.apatch.util.Version
 import me.bmax.apatch.util.copyAndClose
 import me.bmax.apatch.util.copyAndCloseOut
@@ -94,18 +95,31 @@ class PatchesViewModel : ViewModel() {
         val libs = File(info.nativeLibraryDir).listFiles { _, name ->
             execs.contains(name)
         } ?: emptyArray()
+        val cachedKptools = KernelPatchUpdate.cachedKptools()
 
         for (lib in libs) {
             val name = lib.name.substring(3, lib.name.length - 3)
-            Os.symlink(lib.path, "$patchDir/$name")
+            if (name == "kptools" && cachedKptools != null) {
+                cachedKptools.copyTo(File(patchDir.path, name), overwrite = true)
+                File(patchDir.path, name).setExecutable(true, false)
+            } else {
+                Os.symlink(lib.path, "$patchDir/$name")
+            }
         }
 
-        // Extract scripts
+        // Extract scripts. Prefer a runtime-downloaded KernelPatch image over
+        // the APK-bundled fallback so Manager can test a newer KP release
+        // without rebuilding the Manager.
+        val cachedKpimg = KernelPatchUpdate.cachedKpimg()
         for (script in listOf(
             "boot_patch.sh", "boot_unpatch.sh", "boot_extract.sh", "util_functions.sh", "kpimg"
         )) {
             val dest = File(patchDir, script)
-            apApp.assets.open(script).writeTo(dest)
+            if (script == "kpimg" && cachedKpimg != null) {
+                cachedKpimg.copyTo(dest, overwrite = true)
+            } else {
+                apApp.assets.open(script).writeTo(dest)
+            }
         }
 
     }
@@ -517,6 +531,7 @@ class PatchesViewModel : ViewModel() {
                     ).to(logs, logs).exec()
 
                     if (mode == PatchMode.PATCH_AND_INSTALL) {
+                        KernelPatchUpdate.markInstalled(KernelPatchUpdate.currentPatchReleaseTag())
                         logs.add("- Reboot to finish the installation...")
                         needReboot = true
                         APApplication.markNeedReboot()
