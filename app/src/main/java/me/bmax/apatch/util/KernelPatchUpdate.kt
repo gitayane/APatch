@@ -81,66 +81,79 @@ object KernelPatchUpdate {
     fun currentPatchReleaseTag(): String =
         cachedReleaseTag() ?: bundledReleaseTag()
 
-    fun latestRelease(): KernelPatchReleaseInfo? {
+    fun latestPrerelease(): KernelPatchReleaseInfo? {
         return runCatching {
             val request = okhttp3.Request.Builder()
-                .url(LATEST_URL)
+                .url("https://api.github.com/repos/$REPOSITORY/releases?per_page=20")
                 .header("Accept", "application/vnd.github+json")
                 .build()
 
             apApp.okhttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "GitHub latest release request failed: HTTP ${response.code}")
+                    Log.w(TAG, "GitHub KernelPatch prerelease request failed: HTTP ${response.code}")
                     return@runCatching null
                 }
 
                 val body = response.body?.string() ?: return@runCatching null
-                val json = JSONObject(body)
+                val releases = org.json.JSONArray(body)
+                var best: KernelPatchReleaseInfo? = null
+                var bestPublishedAt = ""
 
-                if (json.optBoolean("draft", false) || json.optBoolean("prerelease", false)) {
-                    return@runCatching null
-                }
+                for (i in 0 until releases.length()) {
+                    val json = releases.optJSONObject(i) ?: continue
+                    if (json.optBoolean("draft", false) || !json.optBoolean("prerelease", false)) {
+                        continue
+                    }
 
-                val tag = json.optString("tag_name").trim()
-                if (tag.isEmpty()) return@runCatching null
+                    val publishedAt = json.optString("published_at")
+                    if (publishedAt.isBlank() || (best != null && publishedAt <= bestPublishedAt)) {
+                        continue
+                    }
 
-                var kpimgUrl: String? = null
-                var kpimgDigest: String? = null
-                var kptoolsUrl: String? = null
-                var kptoolsDigest: String? = null
+                    val tag = json.optString("tag_name").trim()
+                    if (tag.isEmpty()) continue
 
-                val assets = json.optJSONArray("assets") ?: return@runCatching null
-                for (i in 0 until assets.length()) {
-                    val asset = assets.optJSONObject(i) ?: continue
-                    when (asset.optString("name")) {
-                        "kpimg-android" -> {
-                            kpimgUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
-                            kpimgDigest = asset.optString("digest").takeIf { it.isNotBlank() }
-                        }
-                        "kptools-android" -> {
-                            kptoolsUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
-                            kptoolsDigest = asset.optString("digest").takeIf { it.isNotBlank() }
+                    var kpimgUrl: String? = null
+                    var kpimgDigest: String? = null
+                    var kptoolsUrl: String? = null
+                    var kptoolsDigest: String? = null
+
+                    val assets = json.optJSONArray("assets") ?: continue
+                    for (j in 0 until assets.length()) {
+                        val asset = assets.optJSONObject(j) ?: continue
+                        when (asset.optString("name")) {
+                            "kpimg-android" -> {
+                                kpimgUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                                kpimgDigest = asset.optString("digest").takeIf { it.isNotBlank() }
+                            }
+                            "kptools-android" -> {
+                                kptoolsUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                                kptoolsDigest = asset.optString("digest").takeIf { it.isNotBlank() }
+                            }
                         }
                     }
+
+                    if (kpimgUrl == null || kptoolsUrl == null) continue
+
+                    val candidate = KernelPatchReleaseInfo(
+                        tag = tag,
+                        name = json.optString("name", tag),
+                        changelog = json.optString("body"),
+                        kpimgUrl = kpimgUrl,
+                        kpimgDigest = kpimgDigest,
+                        kptoolsUrl = kptoolsUrl,
+                        kptoolsDigest = kptoolsDigest,
+                    )
+                    best = candidate
+                    bestPublishedAt = publishedAt
                 }
 
-                kpimgUrl ?: return@runCatching null
-
-                KernelPatchReleaseInfo(
-                    tag = tag,
-                    name = json.optString("name", tag),
-                    changelog = json.optString("body"),
-                    kpimgUrl = kpimgUrl,
-                    kpimgDigest = kpimgDigest,
-                    kptoolsUrl = kptoolsUrl,
-                    kptoolsDigest = kptoolsDigest,
-                )
+                best
             }
         }.onFailure {
-            Log.w(TAG, "latest KernelPatch query failed", it)
+            Log.w(TAG, "latest KernelPatch prerelease query failed", it)
         }.getOrNull()
     }
-
     fun needsUpdate(latest: KernelPatchReleaseInfo): Boolean {
         val current = appliedReleaseTag() ?: bundledReleaseTag()
         return current != latest.tag
@@ -196,7 +209,7 @@ object KernelPatchUpdate {
     }
 
     fun ensureLatestCached(): Result<KernelPatchReleaseInfo> {
-        val latest = latestRelease()
+        val latest = latestPrerelease()
             ?: return Result.failure(IllegalStateException("Cannot query the latest KernelPatch release"))
 
         if (cachedReleaseTag() != latest.tag) {
