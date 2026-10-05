@@ -164,10 +164,16 @@ object KernelPatchUpdate {
                 downloadVerified(release.kptoolsUrl, kptoolsTmp, release.kptoolsDigest)
             }
 
+            check(cachedKpimgFile.delete() || !cachedKpimgFile.exists()) {
+                "Cannot remove previous cached kpimg"
+            }
             check(kpimgTmp.renameTo(cachedKpimgFile)) { "Cannot replace cached kpimg" }
 
             val hasKptools = release.kptoolsUrl != null
             if (hasKptools) {
+                check(cachedKptoolsFile.delete() || !cachedKptoolsFile.exists()) {
+                    "Cannot remove previous cached kptools"
+                }
                 check(kptoolsTmp.renameTo(cachedKptoolsFile)) { "Cannot replace cached kptools" }
             } else {
                 cachedKptoolsFile.delete()
@@ -178,6 +184,9 @@ object KernelPatchUpdate {
                 setProperty(META_KPTOOLS, hasKptools.toString())
             }
             FileOutputStream(metaTmp).use { props.store(it, "KernelPatch cache") }
+            check(metadataFile.delete() || !metadataFile.exists()) {
+                "Cannot remove previous KernelPatch metadata"
+            }
             check(metaTmp.renameTo(metadataFile)) { "Cannot replace KernelPatch metadata" }
 
             Log.i(TAG, "Cached KernelPatch release ${release.tag}")
