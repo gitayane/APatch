@@ -189,7 +189,7 @@ jobs:
         with:
           token: ${{ github.token }}
           tag: preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
-          name: APatch ${{ steps.parse_version.outputs.VERSION }} Preview #${{ github.run_number }}
+          name: "APatch ${{ steps.parse_version.outputs.VERSION }} Preview #${{ github.run_number }}"
           artifacts: ${{ steps.preview_apk.outputs.apk }}
           generateReleaseNotes: false
           prerelease: true
