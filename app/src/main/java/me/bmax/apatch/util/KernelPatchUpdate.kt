@@ -56,7 +56,7 @@ object KernelPatchUpdate {
         return runCatching {
             Properties().also { props ->
                 FileInputStream(metadataFile).use { props.load(it) }
-            }[META_TAG]
+            }.getProperty(META_TAG)
         }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
