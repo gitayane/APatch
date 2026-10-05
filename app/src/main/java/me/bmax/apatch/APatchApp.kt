@@ -14,6 +14,7 @@ import com.topjohnwu.superuser.CallbackList
 import me.bmax.apatch.ui.CrashHandleActivity
 import me.bmax.apatch.util.APatchCli
 import me.bmax.apatch.util.APatchKeyHelper
+import me.bmax.apatch.util.KernelPatchUpdate
 import me.bmax.apatch.util.Version
 import me.bmax.apatch.util.getRootShell
 import me.bmax.apatch.util.rootShellForResult
@@ -196,18 +197,47 @@ class APApplication : Application(), Thread.UncaughtExceptionHandler {
                         return@thread
                     }
 
-                    // KernelPatch version
-                    //val buildV = Version.buildKPVUInt()
-                    //val installedV = Version.installedKPVUInt()
-                    //use build time to check update
+                    // KernelPatch release state
+                    // The bundled kpimg remains the bootstrap/fallback image. After
+                    // a runtime update, the installed release tag is persisted so
+                    // Manager can keep using a newer KP without rebuilding the APK.
                     val buildV = Version.getKpImg()
                     val installedV = Version.installedKPTime()
+                    val bundledReleaseTag = KernelPatchUpdate.bundledReleaseTag()
 
+                    if (buildV == installedV) {
+                        // This also repairs stale runtime markers after installing
+                        // a Manager APK that bundles a newer release.
+                        KernelPatchUpdate.markInstalled(bundledReleaseTag)
+                    }
 
-                    Log.d(TAG, "kp installed version: ${installedV}, build version: $buildV")
+                    var kernelPatchNeedsUpdate = false
+                    val appliedReleaseTag = KernelPatchUpdate.appliedReleaseTag()
+                    val currentReleaseTag = appliedReleaseTag ?: bundledReleaseTag
 
-                    // use != instead of > to enable downgrade,
-                    if (buildV != installedV) {
+                    // Preserve the original build-time check for manually installed
+                    // or otherwise unknown KP images.
+                    if (buildV != installedV && appliedReleaseTag == null) {
+                        kernelPatchNeedsUpdate = true
+                    }
+
+                    // Check our custom KernelPatch release channel. A release tag,
+                    // rather than only the numeric KP version, distinguishes builds
+                    // such as 0.13.9-xzp1 from upstream 0.13.9.
+                    KernelPatchUpdate.latestRelease()?.let { latest ->
+                        if (latest.tag != currentReleaseTag) {
+                            kernelPatchNeedsUpdate = true
+                            Log.d(TAG, "new KernelPatch release available: ${latest.tag}")
+                        }
+                    }
+
+                    Log.d(
+                        TAG,
+                        "kp installed build time: ${installedV}, bundled build time: ${buildV}, " +
+                            "current release: ${currentReleaseTag}, needs update: ${kernelPatchNeedsUpdate}"
+                    )
+
+                    if (kernelPatchNeedsUpdate) {
                         _kpStateLiveData.postValue(State.KERNELPATCH_NEED_UPDATE)
                     }
                     Log.d(TAG, "kp state: " + _kpStateLiveData.value)
