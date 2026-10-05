@@ -24,8 +24,6 @@ data class KernelPatchReleaseInfo(
 object KernelPatchUpdate {
     private const val TAG = "KernelPatchUpdate"
     private const val REPOSITORY = "gitayane/KernelPatch"
-    private const val LATEST_URL = "https://api.github.com/repos/${REPOSITORY}/releases/latest"
-
     private const val PREF_APPLIED_TAG = "kernelpatch_applied_release"
     private const val META_TAG = "tag"
     private const val META_KPTOOLS = "kptools"
