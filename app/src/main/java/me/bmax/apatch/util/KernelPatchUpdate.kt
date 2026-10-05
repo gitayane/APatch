@@ -3,6 +3,7 @@ package me.bmax.apatch.util
 import android.util.Log
 import androidx.core.content.edit
 import me.bmax.apatch.BuildConfig
+import me.bmax.apatch.APApplication
 import me.bmax.apatch.apApp
 import org.json.JSONObject
 import java.io.File
@@ -43,10 +44,10 @@ object KernelPatchUpdate {
     fun bundledReleaseTag(): String = BuildConfig.kernelPatchReleaseTag
 
     fun appliedReleaseTag(): String? =
-        apApp.sharedPreferences.getString(PREF_APPLIED_TAG, null)?.takeIf { it.isNotBlank() }
+        APApplication.sharedPreferences.getString(PREF_APPLIED_TAG, null)?.takeIf { it.isNotBlank() }
 
     fun markInstalled(tag: String) {
-        apApp.sharedPreferences.edit { putString(PREF_APPLIED_TAG, tag) }
+        APApplication.sharedPreferences.edit { putString(PREF_APPLIED_TAG, tag) }
         Log.i(TAG, "KernelPatch release marked installed: $tag")
     }
 
@@ -201,6 +202,7 @@ object KernelPatchUpdate {
             check(metaTmp.renameTo(metadataFile)) { "Cannot replace KernelPatch metadata" }
 
             Log.i(TAG, "Cached KernelPatch release ${release.tag}")
+            Unit
         }.onFailure {
             Log.e(TAG, "Failed to cache KernelPatch ${release.tag}", it)
         }
