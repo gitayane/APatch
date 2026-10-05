@@ -6,7 +6,7 @@ plugins {
 
 // app/src/main/cpp/version is the single source of the KernelPatch version;
 // apd/build.rs derives its copy from it as well.
-project.ext.set("kernelPatchVersion", getKernelPatchVersion())
+// Keep the upstream KernelPatch version while pinning the actual assets to the\n// XZP-compatible release published by the fork.\nproject.ext.set("kernelPatchVersion", getKernelPatchVersion())\nproject.ext.set("kernelPatchRepository", "gitayane/KernelPatch")\nproject.ext.set("kernelPatchReleaseTag", "0.13.9-xzp1")
 
 extra.set("androidMinSdkVersion", 26)
 extra.set("androidTargetSdkVersion", 36)
