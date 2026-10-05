@@ -94,6 +94,7 @@ import me.bmax.apatch.ui.component.WarningCard
 import me.bmax.apatch.ui.component.rememberConfirmDialog
 import me.bmax.apatch.ui.viewmodel.PatchesViewModel
 import me.bmax.apatch.util.LatestVersionInfo
+import me.bmax.apatch.util.KernelPatchUpdate
 import me.bmax.apatch.util.Version
 import me.bmax.apatch.util.Version.getManagerVersion
 import me.bmax.apatch.util.checkNewVersion
@@ -492,11 +493,25 @@ private fun KStatusCard(
                             }
 
                             kpState == APApplication.State.KERNELPATCH_NEED_UPDATE -> {
-                                // todo: remove legacy compact for kp < 0.9.0
-                                if (Version.installedKPVUInt() < 0x900u) {
-                                    navigator.navigate(PatchesDestination(PatchesViewModel.PatchMode.PATCH_ONLY))
-                                } else {
-                                    navigator.navigate(InstallModeSelectScreenDestination)
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        KernelPatchUpdate.ensureLatestCached()
+                                    }
+                                    if (result.isFailure) {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.kernelpatch_update_download_failed),
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                    // The installer prefers the runtime cache and
+                                    // falls back to the bundled kpimg when download
+                                    // is unavailable.
+                                    if (Version.installedKPVUInt() < 0x900u) {
+                                        navigator.navigate(PatchesDestination(PatchesViewModel.PatchMode.PATCH_ONLY))
+                                    } else {
+                                        navigator.navigate(InstallModeSelectScreenDestination)
+                                    }
                                 }
                             }
 
