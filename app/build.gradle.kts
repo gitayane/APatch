@@ -26,7 +26,7 @@ val kernelPatchVersion: String = rootProject.extra["kernelPatchVersion"] as Stri
 // XZP-compatible KernelPatch assets are pinned at build time. Keep these
 // local to the app module so the upstream root extra-property contract remains unchanged.
 val kernelPatchRepository = "gitayane/KernelPatch"
-val kernelPatchReleaseTag = "0.13.9-xzp1"
+val kernelPatchReleaseTag = "0.13.9-xzp2"
 
 apksign {
     storeFileProperty = "KEYSTORE_FILE"
