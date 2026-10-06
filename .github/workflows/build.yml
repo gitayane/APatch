@@ -139,6 +139,12 @@ jobs:
             echo "apk=${PREVIEW_APK}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Upload preview APK artifact
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: APatch-XZP-Preview-${{ github.run_number }}
+          path: ${{ steps.preview_apk.outputs.apk }}
       - name: Upload mappings
         uses: actions/upload-artifact@v7
         with:
