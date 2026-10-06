@@ -46,6 +46,9 @@ fun getKernelPatchVersion(): String {
 
 fun getBranch(): String {
     return exec("git rev-parse --abbrev-ref HEAD").trim()
+        .replace(Regex("[^A-Za-z0-9._-]+"), "-")
+        .trim('-')
+        .ifEmpty { "detached" }
 }
 
 fun getVersionName(): String {
