@@ -95,7 +95,7 @@ object KernelPatchStore {
 
         response.use {
             if (!it.isSuccessful) {
-                throw IllegalStateException("GitHub API returned HTTP \${it.code}")
+                throw IllegalStateException("GitHub API returned HTTP ${it.code}")
             }
 
             val body = it.body?.string().orEmpty()
@@ -131,7 +131,7 @@ object KernelPatchStore {
     suspend fun activate(release: Release, channel: Channel): Active =
         withContext(Dispatchers.IO) {
             rootDir.mkdirs()
-            val staging = File(rootDir, ".staging-\${System.currentTimeMillis()}")
+            val staging = File(rootDir, ".staging-${System.currentTimeMillis()}")
             staging.deleteRecursively()
             staging.mkdirs()
 
@@ -179,7 +179,7 @@ object KernelPatchStore {
                     throw IllegalStateException("Failed to activate KernelPatch assets")
                 }
 
-                Log.i(TAG, "activated \${active.tag} (\${active.compileTime})")
+                Log.i(TAG, "activated ${active.tag} (${active.compileTime})")
                 active
             } finally {
                 staging.deleteRecursively()
@@ -216,10 +216,10 @@ object KernelPatchStore {
 
         apApp.okhttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IllegalStateException("Download \${asset.name} failed: HTTP \${response.code}")
+                throw IllegalStateException("Download ${asset.name} failed: HTTP ${response.code}")
             }
 
-            val body = response.body ?: throw IllegalStateException("Empty \${asset.name}")
+            val body = response.body ?: throw IllegalStateException("Empty ${asset.name}")
             val digest = MessageDigest.getInstance("SHA-256")
 
             body.byteStream().use { input ->
@@ -238,14 +238,14 @@ object KernelPatchStore {
             if (!actual.equals(asset.sha256, ignoreCase = true)) {
                 destination.delete()
                 throw SecurityException(
-                    "SHA-256 mismatch for \${asset.name}: expected \${asset.sha256}, got \$actual"
+                    "SHA-256 mismatch for ${asset.name}: expected ${asset.sha256}, got $actual"
                 )
             }
 
             if (asset.size >= 0L && destination.length() != asset.size) {
                 destination.delete()
                 throw SecurityException(
-                    "Size mismatch for \${asset.name}: expected \${asset.size}, got \${destination.length()}"
+                    "Size mismatch for ${asset.name}: expected ${asset.size}, got ${destination.length()}"
                 )
             }
         }
@@ -258,11 +258,11 @@ object KernelPatchStore {
 
     private fun readKpimgInfo(kpimg: File, kptools: File): KpimgInfo {
         val result = rootShellForResult(
-            "\"\${kptools.absolutePath}\" -l -k \"\${kpimg.absolutePath}\""
+            "\"${kptools.absolutePath}\" -l -k \"${kpimg.absolutePath}\""
         )
         if (!result.isSuccess) {
             throw IllegalStateException(
-                "Failed to inspect kpimg: \${result.err.joinToString("\n")}"
+                "Failed to inspect kpimg: ${result.err.joinToString("\n")}"
             )
         }
 
