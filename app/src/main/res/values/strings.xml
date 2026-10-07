@@ -93,6 +93,7 @@
     <string name="patch_config_title">Patches</string>
     <string name="patch_mode_bootimg_patch">Mode: Patch</string>
     <string name="patch_mode_patch_and_install">Mode: Patch and install</string>
+    <string name="patch_mode_kernelpatch_update">Mode: Update KernelPatch</string>
     <string name="patch_mode_install_to_next_slot">Mode: Install to inactive slot (After OTA)</string>
     <string name="patch_mode_uninstall_patch">Mode: Uninstall KPatch</string>
     <string name="patch_select_bootimg_btn">Select boot</string>
@@ -224,8 +225,19 @@
     <string name="mode_select_page_install_inactive_slot">Install to inactive slot (After OTA)</string>
     <string name="mode_select_page_install_inactive_slot_warning">Your device will be **FORCED** to boot to the current inactive slot after a reboot!\nOnly use this option after OTA is done.\nContinue?</string>
 
+    <string name="home_more_menu_kernelpatch">KernelPatch</string>
     <string name="home_more_menu_feedback_or_suggestion">Feedback or suggestion</string>
     <string name="home_more_menu_about">About</string>
+    <string name="kp_manager_title">KernelPatch Manager</string>
+    <string name="kp_manager_stable">Stable</string>
+    <string name="kp_manager_test">Test</string>
+    <string name="kp_manager_current">Active KernelPatch</string>
+    <string name="kp_manager_release_meta">Published: %s</string>
+    <string name="kp_manager_download_install">Download and install</string>
+    <string name="kp_manager_apply">Apply</string>
+    <string name="kp_manager_downloading">Downloading and verifying KernelPatch assets…</string>
+    <string name="kp_manager_empty">No compatible KernelPatch releases found for this channel.</string>
+    <string name="kp_manager_error">KernelPatch Manager error: %s</string>
 
     <string name="home_dialog_uninstall_title">Uninstall</string>
 
