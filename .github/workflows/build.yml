@@ -3,7 +3,10 @@ name: Build Manager
 on:
   push:
     tags: [ "*" ]
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - "feat/**"
+      - "dev/**"
     paths:
       - '.github/workflows/build.yml'
       - 'app/**'
@@ -120,7 +123,7 @@ jobs:
 
       - name: Prepare preview APK
         id: preview_apk
-        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
         env:
           SIGNED_RELEASE_APK: ${{ steps.sign_app.outputs.signedReleaseFile }}
         run: |
@@ -140,10 +143,10 @@ jobs:
           fi
 
       - name: Upload preview APK artifact
-        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
         uses: actions/upload-artifact@v7
         with:
-          name: APatch-XZP-Preview-${{ github.run_number }}
+          name: APatch-Preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
           path: ${{ steps.preview_apk.outputs.apk }}
       - name: Upload mappings
         uses: actions/upload-artifact@v7
@@ -193,13 +196,13 @@ jobs:
           fi
 
       - name: Release preview apk
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
         continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
           token: ${{ github.token }}
           tag: preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
-          name: "APatch ${{ steps.parse_version.outputs.VERSION }} Preview #${{ github.run_number }}"
+          name: "APatch Preview ${{ steps.parse_version.outputs.VERSION }} (#${{ github.run_number }})"
           artifacts: ${{ steps.preview_apk.outputs.apk }}
           generateReleaseNotes: false
           prerelease: true
