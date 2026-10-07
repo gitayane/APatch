@@ -47,6 +47,14 @@ jobs:
           echo "Generated Version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Validate release mode
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'release' }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Stable releases may only be published from main."
+            exit 1
+          fi
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
