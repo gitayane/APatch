@@ -143,7 +143,7 @@ fun KernelPatchManagerScreen(navigator: DestinationsNavigator) {
                                 active = null
                                 navigator.navigate(
                                     PatchesDestination(
-                                        PatchesViewModel.PatchMode.UPDATE_KERNELPATCH
+                                        PatchesViewModel.PatchMode.PATCH_AND_INSTALL
                                     )
                                 )
                             },
@@ -218,7 +218,7 @@ fun KernelPatchManagerScreen(navigator: DestinationsNavigator) {
                                             active = it
                                             navigator.navigate(
                                                 PatchesDestination(
-                                                    PatchesViewModel.PatchMode.UPDATE_KERNELPATCH
+                                                    PatchesViewModel.PatchMode.PATCH_AND_INSTALL
                                                 )
                                             )
                                         }.onFailure {
