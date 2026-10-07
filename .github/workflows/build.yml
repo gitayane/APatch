@@ -209,7 +209,9 @@ jobs:
       - name: Release apk
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' }}
+        # Only canonical numeric release tags may publish a stable release.
+        # XZP/dev tags such as xzp-11293 must never overwrite the numeric release.
+        if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' && github.ref_name == steps.parse_version.outputs.VERSION }}
         continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
