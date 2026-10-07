@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -47,6 +46,7 @@ import me.bmax.apatch.ui.viewmodel.PatchesViewModel
 import me.bmax.apatch.util.KernelPatchStore
 
 @Destination<RootGraph>
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KernelPatchManagerScreen(navigator: DestinationsNavigator) {
     var channel by remember { mutableStateOf(KernelPatchStore.Channel.STABLE) }
