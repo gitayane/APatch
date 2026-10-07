@@ -271,8 +271,8 @@ object KernelPatchStore {
             ?: throw IllegalStateException("Downloaded kpimg has no [kpimg] section")
 
         return KpimgInfo(
-            version = section.optString("version", ""),
-            compileTime = section.optString("compile_time", "")
+            version = section["version"]?.toString().orEmpty(),
+            compileTime = section["compile_time"]?.toString().orEmpty()
         )
     }
 }
