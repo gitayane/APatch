@@ -283,7 +283,7 @@ class PatchesViewModel : ViewModel() {
             if (entryMode != PatchMode.UNPATCH) {
                 parseKpimg()
             }
-            if (entryMode == PatchMode.PATCH_AND_INSTALL || entryMode == PatchMode.UNPATCH || entryMode == PatchMode.INSTALL_TO_NEXT_SLOT) {
+            if (entryMode == PatchMode.PATCH_AND_INSTALL || entryMode == PatchMode.UPDATE_KERNELPATCH || entryMode == PatchMode.UNPATCH || entryMode == PatchMode.INSTALL_TO_NEXT_SLOT) {
                 extractAndParseBootimg(entryMode)
             }
             prepared = true
