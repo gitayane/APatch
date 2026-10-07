@@ -235,6 +235,7 @@
     <string name="kp_manager_release_meta">Published: %s</string>
     <string name="kp_manager_download_install">Download and install</string>
     <string name="kp_manager_apply">Apply</string>
+    <string name="kp_manager_use_bundled">Use bundled KernelPatch</string>
     <string name="kp_manager_downloading">Downloading and verifying KernelPatch assets…</string>
     <string name="kp_manager_empty">No compatible KernelPatch releases found for this channel.</string>
     <string name="kp_manager_error">KernelPatch Manager error: %s</string>
