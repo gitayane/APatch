@@ -124,33 +124,10 @@ fun Patches(mode: PatchesViewModel.PatchMode) {
     val scope = rememberCoroutineScope()
 
     var needKey by rememberSaveable { mutableStateOf(false) }
-    var autoUpdateStarted by rememberSaveable { mutableStateOf(false) }
 
     val viewModel = viewModel<PatchesViewModel>()
     LaunchedEffect(mode) {
         viewModel.prepare(mode)
-    }
-
-    LaunchedEffect(
-        mode,
-        viewModel.running,
-        viewModel.kimgInfo.banner,
-        viewModel.error,
-        viewModel.patching,
-        viewModel.patchdone
-    ) {
-        if (
-            mode == PatchesViewModel.PatchMode.UPDATE_KERNELPATCH &&
-            !autoUpdateStarted &&
-            !viewModel.running &&
-            !viewModel.patching &&
-            !viewModel.patchdone &&
-            viewModel.error.isEmpty() &&
-            viewModel.kimgInfo.banner.isNotEmpty()
-        ) {
-            autoUpdateStarted = true
-            viewModel.doPatch(mode, useKey = false)
-        }
     }
 
     Scaffold(topBar = {
@@ -297,7 +274,9 @@ fun Patches(mode: PatchesViewModel.PatchMode) {
 
             // do patch, update, unpatch
             if (!viewModel.patching && !viewModel.patchdone) {
-                // patch start; KernelPatch channel updates are started automatically.
+                // The KernelPatch Manager only selects/activates the KP assets.
+                // Patching remains a user-confirmed operation through the normal
+                // "install -> direct install" flow.
                 if (mode != PatchesViewModel.PatchMode.UNPATCH &&
                     mode != PatchesViewModel.PatchMode.UPDATE_KERNELPATCH) {
                     val isKeyReady = !needKey || viewModel.superkey.isNotEmpty()
