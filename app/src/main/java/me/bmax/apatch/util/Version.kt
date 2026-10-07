@@ -32,6 +32,8 @@ object Version {
     }
 
     fun getKpImg(): String {
+        KernelPatchStore.activeCompileTime()?.let { return it }
+
         val patchDir: ExtendedFile = FileSystemManager.getLocal().getFile(apApp.filesDir.parent, "check")
         patchDir.deleteRecursively()
         patchDir.mkdirs()
