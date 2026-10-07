@@ -380,7 +380,11 @@ private fun KStatusCard(
     ElevatedCard(
         onClick = {
             if (!isJailbreak && kpState != APApplication.State.KERNELPATCH_INSTALLED) {
-                navigator.navigate(InstallModeSelectScreenDestination)
+                if (kpState == APApplication.State.KERNELPATCH_NEED_UPDATE) {
+                    navigator.navigate(KernelPatchManagerScreenDestination)
+                } else {
+                    navigator.navigate(InstallModeSelectScreenDestination)
+                }
             }
         },
         colors = CardDefaults.elevatedCardColors(containerColor = cardBackgroundColor),
@@ -499,11 +503,10 @@ private fun KStatusCard(
                             }
 
                             kpState == APApplication.State.KERNELPATCH_NEED_UPDATE -> {
-                                // todo: remove legacy compact for kp < 0.9.0
                                 if (Version.installedKPVUInt() < 0x900u) {
                                     navigator.navigate(PatchesDestination(PatchesViewModel.PatchMode.PATCH_ONLY))
                                 } else {
-                                    navigator.navigate(InstallModeSelectScreenDestination)
+                                    navigator.navigate(KernelPatchManagerScreenDestination)
                                 }
                             }
 
