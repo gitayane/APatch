@@ -14,15 +14,6 @@ on:
       - 'build.gradle.kts'
       - 'gradle/libs.versions.toml'
       - 'version.properties'
-  pull_request:
-    branches: [ "main" ]
-    paths:
-      - '.github/workflows/build.yml'
-      - 'app/**'
-      - 'apd/**'
-      - 'build.gradle.kts'
-      - 'gradle/libs.versions.toml'
-      - 'version.properties'
   workflow_call:
   workflow_dispatch:
 
@@ -123,7 +114,7 @@ jobs:
 
       - name: Prepare preview APK
         id: preview_apk
-        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
         env:
           SIGNED_RELEASE_APK: ${{ steps.sign_app.outputs.signedReleaseFile }}
         run: |
