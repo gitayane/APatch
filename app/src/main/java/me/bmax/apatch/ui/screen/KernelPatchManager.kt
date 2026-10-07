@@ -134,6 +134,21 @@ fun KernelPatchManagerScreen(navigator: DestinationsNavigator) {
                             text = current.tag + " · " + current.compileTime,
                             style = MaterialTheme.typography.bodyMedium
                         )
+                        Spacer(Modifier.height(4.dp))
+                        Button(
+                            onClick = {
+                                KernelPatchStore.clearActive()
+                                active = null
+                                navigator.navigate(
+                                    PatchesDestination(
+                                        PatchesViewModel.PatchMode.UPDATE_KERNELPATCH
+                                    )
+                                )
+                            },
+                            enabled = installingTag == null
+                        ) {
+                            Text(stringResource(R.string.kp_manager_use_bundled))
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
