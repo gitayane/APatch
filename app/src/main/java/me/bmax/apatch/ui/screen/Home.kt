@@ -80,6 +80,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.AboutScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.InstallModeSelectScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.KernelPatchManagerScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.PatchesDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
@@ -311,6 +312,12 @@ private fun TopBar(
                     DropdownMenu(expanded = showDropdownMoreOptions, onDismissRequest = {
                         showDropdownMoreOptions = false
                     }) {
+                        DropdownMenuItem(text = {
+                            Text(stringResource(R.string.home_more_menu_kernelpatch))
+                        }, onClick = {
+                            showDropdownMoreOptions = false
+                            navigator.navigate(KernelPatchManagerScreenDestination)
+                        })
                         DropdownMenuItem(text = {
                             Text(stringResource(R.string.home_more_menu_feedback_or_suggestion))
                         }, onClick = {
