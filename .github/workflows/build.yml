@@ -134,7 +134,7 @@ jobs:
           fi
 
       - name: Upload preview APK artifact
-        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
         uses: actions/upload-artifact@v7
         with:
           name: APatch-Preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
@@ -186,7 +186,7 @@ jobs:
             done
           fi
 
-      - name: Release preview apk
+      - name: Release Preview APK
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'dev/'))) }}
         continue-on-error: true
         uses: ncipollo/release-action@v1
