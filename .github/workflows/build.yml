@@ -3,16 +3,10 @@ name: Build Manager
 on:
   push:
     tags: [ "*" ]
-    branches: [ "main" ]
-    paths:
-      - '.github/workflows/build.yml'
-      - 'app/**'
-      - 'apd/**'
-      - 'build.gradle.kts'
-      - 'gradle/libs.versions.toml'
-      - 'version.properties'
-  pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - "feat/**"
+      - "dev/**"
     paths:
       - '.github/workflows/build.yml'
       - 'app/**'
@@ -22,6 +16,16 @@ on:
       - 'version.properties'
   workflow_call:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "发布类型"
+        required: true
+        type: choice
+        default: none
+        options:
+          - none
+          - preview
+          - release
 
 jobs:
   build-manager:
@@ -42,6 +46,14 @@ jobs:
           VERSION=$((managerVersionEpoch + COMMIT_NUM))
           echo "Generated Version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Validate release mode
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'release' }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Stable releases may only be published from main."
+            exit 1
+          fi
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -118,6 +130,33 @@ jobs:
           echo "signedReleaseFiles=$SIGNED" >> "$GITHUB_OUTPUT"
           echo "nofSignedReleaseFiles=1" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare preview APK
+        id: preview_apk
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish != 'none' }}
+        env:
+          SIGNED_RELEASE_APK: ${{ steps.sign_app.outputs.signedReleaseFile }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SIGNED_RELEASE_APK}" ] && [ -f "${SIGNED_RELEASE_APK}" ]; then
+            echo "Using signed Release APK: ${SIGNED_RELEASE_APK}"
+            echo "apk=${SIGNED_RELEASE_APK}" >> "$GITHUB_OUTPUT"
+          else
+            PREVIEW_APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+            if [ -z "${PREVIEW_APK}" ]; then
+              echo "No Debug APK found. Generated files:"
+              find app/build/outputs/apk -maxdepth 2 -type f -print
+              exit 1
+            fi
+            echo "No signing key available; using Debug APK for preview: ${PREVIEW_APK}"
+            echo "apk=${PREVIEW_APK}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload preview APK artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'preview' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: APatch-Preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
+          path: ${{ steps.preview_apk.outputs.apk }}
       - name: Upload mappings
         uses: actions/upload-artifact@v7
         with:
@@ -165,10 +204,26 @@ jobs:
             done
           fi
 
+      - name: Release Preview APK
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'preview' }}
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
+          name: "APatch Preview ${{ steps.parse_version.outputs.VERSION }} (#${{ github.run_number }})"
+          artifacts: ${{ steps.preview_apk.outputs.apk }}
+          generateReleaseNotes: false
+          prerelease: true
+          makeLatest: false
+          replacesArtifacts: true
+
       - name: Release apk
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' }}
+        # Only canonical numeric release tags may publish a stable release.
+        # XZP/dev tags such as xzp-11293 must never overwrite the numeric release.
+        if: ${{ env.SIGNING_KEY != '' && ((github.ref_type == 'tag' && github.ref_name == steps.parse_version.outputs.VERSION) || (github.event_name == 'workflow_dispatch' && inputs.publish == 'release')) }}
         continue-on-error: true
         uses: ncipollo/release-action@v1
         with:

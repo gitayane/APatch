@@ -210,7 +210,7 @@ fun Patches(mode: PatchesViewModel.PatchMode) {
                 KernelImageView(viewModel.kimgInfo)
             }
 
-            if (mode != PatchesViewModel.PatchMode.UNPATCH && viewModel.kimgInfo.banner.isNotEmpty()) {
+            if (mode != PatchesViewModel.PatchMode.UNPATCH && mode != PatchesViewModel.PatchMode.UPDATE_KERNELPATCH && viewModel.kimgInfo.banner.isNotEmpty()) {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.elevatedCardColors(
@@ -242,7 +242,7 @@ fun Patches(mode: PatchesViewModel.PatchMode) {
             }
 
             // existed extras
-            if (mode == PatchesViewModel.PatchMode.PATCH_AND_INSTALL || mode == PatchesViewModel.PatchMode.INSTALL_TO_NEXT_SLOT) {
+            if (mode == PatchesViewModel.PatchMode.PATCH_AND_INSTALL || mode == PatchesViewModel.PatchMode.UPDATE_KERNELPATCH || mode == PatchesViewModel.PatchMode.INSTALL_TO_NEXT_SLOT) {
                 viewModel.existedExtras.forEach(action = {
                     ExtraItem(extra = it, true, onDelete = {
                         viewModel.existedExtras.remove(it)
@@ -262,7 +262,7 @@ fun Patches(mode: PatchesViewModel.PatchMode) {
             }
 
             // add new KPM
-            if (!viewModel.patching && !viewModel.patchdone && mode != PatchesViewModel.PatchMode.UNPATCH) {
+            if (!viewModel.patching && !viewModel.patchdone && mode != PatchesViewModel.PatchMode.UNPATCH && mode != PatchesViewModel.PatchMode.UPDATE_KERNELPATCH) {
                 SelectFileButton(
                     text = stringResource(id = R.string.patch_embed_kpm_btn),
                     onSelected = { data, uri ->
@@ -274,8 +274,11 @@ fun Patches(mode: PatchesViewModel.PatchMode) {
 
             // do patch, update, unpatch
             if (!viewModel.patching && !viewModel.patchdone) {
-                // patch start
-                if (mode != PatchesViewModel.PatchMode.UNPATCH) {
+                // The KernelPatch Manager only selects/activates the KP assets.
+                // Patching remains a user-confirmed operation through the normal
+                // "install -> direct install" flow.
+                if (mode != PatchesViewModel.PatchMode.UNPATCH &&
+                    mode != PatchesViewModel.PatchMode.UPDATE_KERNELPATCH) {
                     val isKeyReady = !needKey || viewModel.superkey.isNotEmpty()
                     if (isKeyReady) {
                         StartButton(stringResource(id = R.string.patch_start_patch_btn)) {

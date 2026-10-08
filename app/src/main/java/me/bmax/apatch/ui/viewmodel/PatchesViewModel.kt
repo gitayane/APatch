@@ -28,6 +28,7 @@ import me.bmax.apatch.APApplication
 import me.bmax.apatch.BuildConfig
 import me.bmax.apatch.R
 import me.bmax.apatch.apApp
+import me.bmax.apatch.util.KernelPatchStore
 import me.bmax.apatch.util.Version
 import me.bmax.apatch.util.copyAndClose
 import me.bmax.apatch.util.copyAndCloseOut
@@ -50,6 +51,7 @@ class PatchesViewModel : ViewModel() {
     enum class PatchMode(val sId: Int) {
         PATCH_ONLY(R.string.patch_mode_bootimg_patch),
         PATCH_AND_INSTALL(R.string.patch_mode_patch_and_install),
+        UPDATE_KERNELPATCH(R.string.patch_mode_kernelpatch_update),
         INSTALL_TO_NEXT_SLOT(R.string.patch_mode_install_to_next_slot),
         UNPATCH(R.string.patch_mode_uninstall_patch)
     }
@@ -100,12 +102,24 @@ class PatchesViewModel : ViewModel() {
             Os.symlink(lib.path, "$patchDir/$name")
         }
 
-        // Extract scripts
+        // Extract the built-in patching assets first.
         for (script in listOf(
             "boot_patch.sh", "boot_unpatch.sh", "boot_extract.sh", "util_functions.sh", "kpimg"
         )) {
             val dest = File(patchDir, script)
             apApp.assets.open(script).writeTo(dest)
+        }
+
+        // A downloaded Stable/Test KernelPatch replaces only kpimg and kptools.
+        // The rest of the boot patching machinery stays on the tested Manager build.
+        val activeKpimg = KernelPatchStore.activeKpimgFile()
+        val activeKptools = KernelPatchStore.activeKptoolsFile()
+        if (activeKpimg != null && activeKptools != null) {
+            activeKpimg.copyTo(File(patchDir.path, "kpimg"), overwrite = true)
+            File(patchDir.path, "kptools").delete()
+            activeKptools.copyTo(File(patchDir.path, "kptools"), overwrite = true)
+            File(patchDir.path, "kptools").setExecutable(true, false)
+            Log.i(TAG, "using active KernelPatch assets: ${KernelPatchStore.active()?.tag}")
         }
 
     }
@@ -269,7 +283,7 @@ class PatchesViewModel : ViewModel() {
             if (entryMode != PatchMode.UNPATCH) {
                 parseKpimg()
             }
-            if (entryMode == PatchMode.PATCH_AND_INSTALL || entryMode == PatchMode.UNPATCH || entryMode == PatchMode.INSTALL_TO_NEXT_SLOT) {
+            if (entryMode == PatchMode.PATCH_AND_INSTALL || entryMode == PatchMode.UPDATE_KERNELPATCH || entryMode == PatchMode.UNPATCH || entryMode == PatchMode.INSTALL_TO_NEXT_SLOT) {
                 extractAndParseBootimg(entryMode)
             }
             prepared = true
@@ -423,7 +437,7 @@ class PatchesViewModel : ViewModel() {
 
                     val superkey = if (useKey && this@PatchesViewModel.superkey.isNotEmpty()) this@PatchesViewModel.superkey else "su"
 
-                    if (mode == PatchMode.PATCH_AND_INSTALL || mode == PatchMode.INSTALL_TO_NEXT_SLOT) {
+                    if (mode == PatchMode.PATCH_AND_INSTALL || mode == PatchMode.UPDATE_KERNELPATCH || mode == PatchMode.INSTALL_TO_NEXT_SLOT) {
 
                         val KPCheck = shell.newJob().add("truncate ${APApplication.superKey} -Z u:r:magisk:s0 -c whoami").exec()
 
@@ -516,7 +530,7 @@ class PatchesViewModel : ViewModel() {
                         "[ -f $patchDir/ori.img ] && mkdir -p /data/adb/ap && cp $patchDir/ori.img /data/adb/ap/ && rm -f $patchDir/ori.img || true"
                     ).to(logs, logs).exec()
 
-                    if (mode == PatchMode.PATCH_AND_INSTALL) {
+                    if (mode == PatchMode.PATCH_AND_INSTALL || mode == PatchMode.UPDATE_KERNELPATCH) {
                         logs.add("- Reboot to finish the installation...")
                         needReboot = true
                         APApplication.markNeedReboot()
