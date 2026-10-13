@@ -304,15 +304,26 @@ object KernelPatchStore {
     }
 
     private fun ensureDirectory(directory: File, purpose: String) {
+        val parent = directory.parentFile
+
+        // If a directory was left with stale permissions by an earlier install,
+        // repair only the app-owned permission bits before creating a child.
+        if (parent?.isDirectory == true) {
+            restoreOwnerDirectoryAccess(parent)
+            if (!parent.canWrite() || !parent.canExecute()) {
+                throw IOException(
+                    "Cannot create $purpose because its parent is not writable/searchable; " +
+                        describePath(parent)
+                )
+            }
+        }
+
         try {
             Files.createDirectories(directory.toPath())
         } catch (e: Exception) {
-            val parent = directory.parentFile
             throw IOException(
-                "Failed to create $purpose directory: ${directory.absolutePath}; " +
-                    "exists=${directory.exists()}, isDirectory=${directory.isDirectory}, " +
-                    "parent=${parent?.absolutePath}, parentExists=${parent?.exists()}, " +
-                    "parentIsDirectory=${parent?.isDirectory}, parentCanWrite=${parent?.canWrite()}, " +
+                "Failed to create $purpose directory; target=${describePath(directory)}; " +
+                    "parent=${parent?.let { describePath(it) } ?: "<none>"}; " +
                     "cause=${e.javaClass.simpleName}: ${e.message}",
                 e
             )
@@ -320,10 +331,50 @@ object KernelPatchStore {
 
         if (!directory.isDirectory) {
             throw IOException(
-                "Failed to create $purpose directory: ${directory.absolutePath}; " +
-                    "path exists=${directory.exists()} but isDirectory=false"
+                "Failed to create $purpose directory; path exists but is not a directory; " +
+                    describePath(directory)
             )
         }
+
+        restoreOwnerDirectoryAccess(directory)
+        if (!directory.canWrite() || !directory.canExecute()) {
+            throw IOException(
+                "Created $purpose directory but it is not writable/searchable; " +
+                    describePath(directory)
+            )
+        }
+    }
+
+    private fun restoreOwnerDirectoryAccess(directory: File) {
+        if (!directory.isDirectory) return
+
+        if (!directory.canWrite()) {
+            val changed = directory.setWritable(true, true)
+            Log.w(TAG, "restore owner-write: path=${directory.absolutePath}, changed=$changed, " +
+                "canWrite=${directory.canWrite()}")
+        }
+
+        if (!directory.canExecute()) {
+            val changed = directory.setExecutable(true, true)
+            Log.w(TAG, "restore owner-execute: path=${directory.absolutePath}, changed=$changed, " +
+                "canExecute=${directory.canExecute()}")
+        }
+    }
+
+    private fun describePath(file: File): String {
+        val owner = runCatching { Files.getOwner(file.toPath()).name }
+            .getOrDefault("<unavailable>")
+        val permissions = runCatching {
+            Files.getPosixFilePermissions(file.toPath())
+                .map { it.name }
+                .sorted()
+                .joinToString(",")
+        }.getOrDefault("<unavailable>")
+
+        return "path=${file.absolutePath}, exists=${file.exists()}, " +
+            "isDirectory=${file.isDirectory}, canRead=${file.canRead()}, " +
+            "canWrite=${file.canWrite()}, canExecute=${file.canExecute()}, " +
+            "owner=$owner, posixPermissions=$permissions"
     }
 
     fun clearActive() {
