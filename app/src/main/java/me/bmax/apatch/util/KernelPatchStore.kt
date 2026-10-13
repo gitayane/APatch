@@ -311,6 +311,9 @@ object KernelPatchStore {
         if (parent?.isDirectory == true) {
             restoreOwnerDirectoryAccess(parent)
             if (!parent.canWrite() || !parent.canExecute()) {
+                repairStoreOwnership(parent)
+            }
+            if (!parent.canWrite() || !parent.canExecute()) {
                 throw IOException(
                     "Cannot create $purpose because its parent is not writable/searchable; " +
                         describePath(parent)
@@ -338,11 +341,49 @@ object KernelPatchStore {
 
         restoreOwnerDirectoryAccess(directory)
         if (!directory.canWrite() || !directory.canExecute()) {
+            repairStoreOwnership(directory)
+        }
+        if (!directory.canWrite() || !directory.canExecute()) {
             throw IOException(
                 "Created $purpose directory but it is not writable/searchable; " +
                     describePath(directory)
             )
         }
+    }
+
+    /**
+     * A previous root-context operation or data restore can leave this app-private
+     * store owned by root. chmod from the app UID cannot repair that ownership.
+     * Restrict root-shell repair to the exact getDir() root or one of its direct
+     * children; never accept an arbitrary path from callers.
+     */
+    private fun repairStoreOwnership(directory: File) {
+        val expectedRoot = runCatching {
+            apApp.getDir(STORE_DIR, Context.MODE_PRIVATE).canonicalFile
+        }.getOrNull() ?: return
+        val target = runCatching { directory.canonicalFile }.getOrNull() ?: return
+        if (target != expectedRoot && target.parentFile != expectedRoot) {
+            Log.w(TAG, "Skip ownership repair outside KernelPatch store: ${directory.absolutePath}")
+            return
+        }
+        if (!target.exists() || !target.isDirectory) return
+
+        val uid = apApp.applicationInfo.uid
+        val quotedPath = "'" + target.path.replace("'", "'\\''") + "'"
+        val command =
+            "chown -R $uid:$uid $quotedPath && chmod 700 $quotedPath && " +
+                "(restorecon -R $quotedPath >/dev/null 2>&1 || true)"
+        val result = runCatching { rootShellForResult(command) }.getOrElse {
+            Log.e(TAG, "Root ownership repair failed for ${target.path}", it)
+            return
+        }
+
+        Log.w(
+            TAG,
+            "Root ownership repair: path=${target.path}, uid=$uid, success=${result.isSuccess}, " +
+                "out=${result.out.joinToString(" ").take(300)}, " +
+                "err=${result.err.joinToString(" ").take(500)}"
+        )
     }
 
     private fun restoreOwnerDirectoryAccess(directory: File) {
