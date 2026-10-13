@@ -1,5 +1,6 @@
 package me.bmax.apatch.util
 
+import android.content.Context
 import android.util.Log
 import me.bmax.apatch.apApp
 import org.ini4j.Ini
@@ -8,6 +9,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.io.StringReader
+import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -62,8 +64,17 @@ object KernelPatchStore {
         val kptoolsSha256: String
     )
 
+    // Use Android's named private directory rather than a manually-created child
+    // of filesDir. This also avoids any stale non-directory at files/kernelpatch.
     private val rootDir: File
+        get() = getStoreRoot()
+
+    private val legacyRootDir: File
         get() = File(apApp.filesDir, STORE_DIR)
+
+    @Volatile
+    private var legacyStoreMigrationChecked = false
+    private val legacyStoreMigrationLock = Any()
 
     private val activeDir: File
         get() = File(rootDir, ACTIVE_DIR)
@@ -77,10 +88,12 @@ object KernelPatchStore {
     fun activeKptoolsFile(): File? =
         File(activeDir, "kptools").takeIf { it.isFile && it.length() > 0L }
 
-    fun active(): Active? {
-        if (!metadataFile.isFile) return null
-        return runCatching {
-            val json = JSONObject(metadataFile.readText())
+    fun active(): Active? = runCatching {
+        val file = metadataFile
+        if (!file.isFile) {
+            null
+        } else {
+            val json = JSONObject(file.readText())
             Active(
                 channel = Channel.valueOf(json.getString("channel")),
                 tag = json.getString("tag"),
@@ -90,8 +103,8 @@ object KernelPatchStore {
                 kpimgSha256 = json.getString("kpimgSha256"),
                 kptoolsSha256 = json.getString("kptoolsSha256"),
             )
-        }.getOrNull()
-    }
+        }
+    }.getOrNull()
 
     fun activeCompileTime(): String? =
         active()?.compileTime?.takeIf { it.isNotBlank() }
@@ -233,9 +246,83 @@ object KernelPatchStore {
             }
         }
 
+    private fun getStoreRoot(): File {
+        val directory = try {
+            apApp.getDir(STORE_DIR, Context.MODE_PRIVATE)
+        } catch (e: Exception) {
+            throw IOException(
+                "Android failed to initialize KernelPatch store under " +
+                    "${apApp.dataDir.absolutePath}; filesDir=${apApp.filesDir.absolutePath}; " +
+                    "cause=${e.javaClass.simpleName}: ${e.message}",
+                e
+            )
+        }
+
+        ensureDirectory(directory, "KernelPatch store")
+        migrateLegacyStore(directory)
+        return directory
+    }
+
+    private fun migrateLegacyStore(directory: File) {
+        if (legacyStoreMigrationChecked) return
+
+        synchronized(legacyStoreMigrationLock) {
+            if (legacyStoreMigrationChecked) return
+
+            val legacy = legacyRootDir
+            if (legacy.absolutePath != directory.absolutePath && legacy.exists()) {
+                if (!legacy.isDirectory) {
+                    // Do not delete an unexpected file: the new app-private directory
+                    // is independent, and the legacy path may be useful for diagnosis.
+                    Log.w(TAG, "Legacy KernelPatch path is not a directory: ${legacy.absolutePath}")
+                } else {
+                    legacy.listFiles().orEmpty().forEach { source ->
+                        val destination = File(directory, source.name)
+                        if (destination.exists()) return@forEach
+
+                        if (!source.renameTo(destination)) {
+                            try {
+                                source.copyRecursively(destination, overwrite = false)
+                                source.deleteRecursively()
+                            } catch (e: Exception) {
+                                throw IOException(
+                                    "Failed to migrate KernelPatch data from " +
+                                        "${source.absolutePath} to ${destination.absolutePath}: ${e.message}",
+                                    e
+                                )
+                            }
+                        }
+                    }
+                    if (legacy.listFiles().isNullOrEmpty()) {
+                        legacy.delete()
+                    }
+                }
+            }
+
+            legacyStoreMigrationChecked = true
+        }
+    }
+
     private fun ensureDirectory(directory: File, purpose: String) {
-        if (!directory.isDirectory && !directory.mkdirs() && !directory.isDirectory) {
-            throw IOException("Failed to create $purpose directory: ${directory.absolutePath}")
+        try {
+            Files.createDirectories(directory.toPath())
+        } catch (e: Exception) {
+            val parent = directory.parentFile
+            throw IOException(
+                "Failed to create $purpose directory: ${directory.absolutePath}; " +
+                    "exists=${directory.exists()}, isDirectory=${directory.isDirectory}, " +
+                    "parent=${parent?.absolutePath}, parentExists=${parent?.exists()}, " +
+                    "parentIsDirectory=${parent?.isDirectory}, parentCanWrite=${parent?.canWrite()}, " +
+                    "cause=${e.javaClass.simpleName}: ${e.message}",
+                e
+            )
+        }
+
+        if (!directory.isDirectory) {
+            throw IOException(
+                "Failed to create $purpose directory: ${directory.absolutePath}; " +
+                    "path exists=${directory.exists()} but isDirectory=false"
+            )
         }
     }
 
