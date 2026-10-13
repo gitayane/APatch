@@ -102,7 +102,7 @@ object KernelPatchStore {
         // busy Test channel hide older-page Stable releases (or vice versa).
         val result = ArrayList<Release>()
         var page = 1
-        var pageSize: Int
+        var pageSize = 0
 
         while (page <= MAX_RELEASE_PAGES) {
             val response = apApp.okhttpClient.newCall(
