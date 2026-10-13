@@ -6,9 +6,13 @@ import org.ini4j.Ini
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.io.StringReader
 import java.security.MessageDigest
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 object KernelPatchStore {
@@ -19,6 +23,10 @@ object KernelPatchStore {
     private const val STORE_DIR = "kernelpatch"
     private const val ACTIVE_DIR = "active"
     private const val META_FILE = "metadata.json"
+
+    // Prevent concurrent selections from cleaning or replacing each other's
+    // staging/activation directories.
+    private val activationMutex = Mutex()
 
     enum class Channel {
         STABLE,
@@ -130,61 +138,87 @@ object KernelPatchStore {
 
     suspend fun activate(release: Release, channel: Channel): Active =
         withContext(Dispatchers.IO) {
-            rootDir.mkdirs()
-            val staging = File(rootDir, ".staging-${System.currentTimeMillis()}")
-            staging.deleteRecursively()
-            staging.mkdirs()
+            activationMutex.withLock {
+                ensureDirectory(rootDir, "KernelPatch store")
 
-            try {
-                val kpimg = File(staging, "kpimg")
-                val kptools = File(staging, "kptools")
+                // A timestamp is not unique: two fast taps can start in the same
+                // millisecond and one activation may delete the other's directory.
+                val staging = File(rootDir, ".staging-${UUID.randomUUID()}")
+                ensureDirectory(staging, "KernelPatch staging")
 
-                downloadAndVerify(release.kpimg, kpimg)
-                downloadAndVerify(release.kptools, kptools)
+                // Keep the current active KP until the complete new release has been
+                // downloaded, verified, inspected, and staged successfully.
+                val previous = File(rootDir, ".active-old-${UUID.randomUUID()}")
 
-                kpimg.setExecutable(true, false)
-                kptools.setExecutable(true, false)
+                try {
+                    val kpimg = File(staging, "kpimg")
+                    val kptools = File(staging, "kptools")
 
-                val info = readKpimgInfo(kpimg, kptools)
-                val next = File(rootDir, "active-next")
-                next.deleteRecursively()
-                next.mkdirs()
-                kpimg.copyTo(File(next, "kpimg"), overwrite = true)
-                kptools.copyTo(File(next, "kptools"), overwrite = true)
+                    downloadAndVerify(release.kpimg, kpimg)
+                    downloadAndVerify(release.kptools, kptools)
 
-                val active = Active(
-                    channel = channel,
-                    tag = release.tag,
-                    name = release.name,
-                    kpVersion = info.version,
-                    compileTime = info.compileTime,
-                    kpimgSha256 = release.kpimg.sha256,
-                    kptoolsSha256 = release.kptools.sha256,
-                )
+                    if (!kpimg.setExecutable(true, false)) {
+                        throw IOException("Failed to mark downloaded kpimg executable: ${kpimg.absolutePath}")
+                    }
+                    if (!kptools.setExecutable(true, false)) {
+                        throw IOException("Failed to mark downloaded kptools executable: ${kptools.absolutePath}")
+                    }
 
-                File(next, META_FILE).writeText(
-                    JSONObject()
-                        .put("channel", active.channel.name)
-                        .put("tag", active.tag)
-                        .put("name", active.name)
-                        .put("kpVersion", active.kpVersion)
-                        .put("compileTime", active.compileTime)
-                        .put("kpimgSha256", active.kpimgSha256)
-                        .put("kptoolsSha256", active.kptoolsSha256)
-                        .toString(2)
-                )
+                    val info = readKpimgInfo(kpimg, kptools)
+                    val active = Active(
+                        channel = channel,
+                        tag = release.tag,
+                        name = release.name,
+                        kpVersion = info.version,
+                        compileTime = info.compileTime,
+                        kpimgSha256 = release.kpimg.sha256,
+                        kptoolsSha256 = release.kptools.sha256,
+                    )
 
-                activeDir.deleteRecursively()
-                if (!next.renameTo(activeDir)) {
-                    throw IllegalStateException("Failed to activate KernelPatch assets")
+                    File(staging, META_FILE).writeText(
+                        JSONObject()
+                            .put("channel", active.channel.name)
+                            .put("tag", active.tag)
+                            .put("name", active.name)
+                            .put("kpVersion", active.kpVersion)
+                            .put("compileTime", active.compileTime)
+                            .put("kpimgSha256", active.kpimgSha256)
+                            .put("kptoolsSha256", active.kptoolsSha256)
+                            .toString(2)
+                    )
+
+                    var movedPrevious = false
+                    if (activeDir.exists()) {
+                        if (!activeDir.renameTo(previous)) {
+                            throw IOException("Failed to preserve the currently active KernelPatch")
+                        }
+                        movedPrevious = true
+                    }
+
+                    if (!staging.renameTo(activeDir)) {
+                        if (movedPrevious && !previous.renameTo(activeDir)) {
+                            throw IOException(
+                                "Failed to activate KernelPatch and failed to restore the previous KP"
+                            )
+                        }
+                        throw IOException("Failed to activate KernelPatch assets")
+                    }
+
+                    previous.deleteRecursively()
+                    Log.i(TAG, "activated ${active.tag} (${active.compileTime})")
+                    active
+                } finally {
+                    staging.deleteRecursively()
+                    previous.deleteRecursively()
                 }
-
-                Log.i(TAG, "activated ${active.tag} (${active.compileTime})")
-                active
-            } finally {
-                staging.deleteRecursively()
             }
         }
+
+    private fun ensureDirectory(directory: File, purpose: String) {
+        if (!directory.isDirectory && !directory.mkdirs() && !directory.isDirectory) {
+            throw IOException("Failed to create $purpose directory: ${directory.absolutePath}")
+        }
+    }
 
     fun clearActive() {
         activeDir.deleteRecursively()
@@ -209,6 +243,10 @@ object KernelPatchStore {
     }
 
     private fun downloadAndVerify(asset: Asset, destination: File) {
+        val parent = destination.parentFile
+            ?: throw IOException("No parent directory for download target: ${destination.absolutePath}")
+        ensureDirectory(parent, "download target for ${asset.name}")
+
         val request = okhttp3.Request.Builder()
             .url(asset.url)
             .header("Accept", "application/octet-stream")
@@ -222,8 +260,18 @@ object KernelPatchStore {
             val body = response.body ?: throw IllegalStateException("Empty ${asset.name}")
             val digest = MessageDigest.getInstance("SHA-256")
 
+            val target = try {
+                destination.outputStream().buffered()
+            } catch (e: IOException) {
+                throw IOException(
+                    "Cannot create download target ${destination.absolutePath}; " +
+                        "parent exists=${parent.isDirectory}",
+                    e
+                )
+            }
+
             body.byteStream().use { input ->
-                destination.outputStream().buffered().use { output ->
+                target.use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     while (true) {
                         val read = input.read(buffer)
