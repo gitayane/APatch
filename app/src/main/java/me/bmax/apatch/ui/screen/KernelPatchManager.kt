@@ -207,24 +207,30 @@ fun KernelPatchManagerScreen(navigator: DestinationsNavigator) {
                             Button(
                                 enabled = installingTag == null,
                                 onClick = {
-                                    scope.launch {
+                                    // Set the guard synchronously before launching so a
+                                    // second tap cannot start another activation.
+                                    if (installingTag == null) {
                                         installingTag = release.tag
-                                        error = ""
-                                        runCatching {
-                                            withContext(Dispatchers.IO) {
-                                                KernelPatchStore.activate(release, channel)
-                                            }
-                                        }.onSuccess {
-                                            active = it
-                                            navigator.navigate(
-                                                PatchesDestination(
-                                                    PatchesViewModel.PatchMode.PATCH_AND_INSTALL
+                                        scope.launch {
+                                            error = ""
+                                            try {
+                                                val selected = withContext(Dispatchers.IO) {
+                                                    KernelPatchStore.activate(release, channel)
+                                                }
+                                                active = selected
+                                                navigator.navigate(
+                                                    PatchesDestination(
+                                                        PatchesViewModel.PatchMode.PATCH_AND_INSTALL
+                                                    )
                                                 )
-                                            )
-                                        }.onFailure {
-                                            error = it.message ?: it.toString()
+                                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                error = e.message ?: e.toString()
+                                            } finally {
+                                                installingTag = null
+                                            }
                                         }
-                                        installingTag = null
                                     }
                                 }
                             ) {
