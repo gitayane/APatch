@@ -132,7 +132,7 @@ jobs:
 
       - name: Prepare preview APK
         id: preview_apk
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish != 'none' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish != 'none') || (github.event_name == 'push' && github.ref_type == 'branch' && github.ref != 'refs/heads/main') }}
         env:
           SIGNED_RELEASE_APK: ${{ steps.sign_app.outputs.signedReleaseFile }}
         run: |
@@ -152,7 +152,7 @@ jobs:
           fi
 
       - name: Upload preview APK artifact
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'preview' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish == 'preview') || (github.event_name == 'push' && github.ref_type == 'branch' && github.ref != 'refs/heads/main') }}
         uses: actions/upload-artifact@v7
         with:
           name: APatch-Preview-${{ steps.parse_version.outputs.VERSION }}-${{ github.run_number }}
@@ -206,7 +206,6 @@ jobs:
 
       - name: Release Preview APK
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'preview' }}
-        continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
           token: ${{ github.token }}
