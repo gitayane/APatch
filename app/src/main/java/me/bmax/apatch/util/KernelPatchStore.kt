@@ -209,7 +209,8 @@ object KernelPatchStore {
                     active
                 } finally {
                     staging.deleteRecursively()
-                    previous.deleteRecursively()
+                    // If restoring the previous active KP failed, leave the backup
+                    // directory in place for recovery instead of deleting it here.
                 }
             }
         }
@@ -270,8 +271,8 @@ object KernelPatchStore {
                 )
             }
 
-            body.byteStream().use { input ->
-                target.use { output ->
+            target.use { output ->
+                body.byteStream().use { input ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     while (true) {
                         val read = input.read(buffer)
@@ -290,10 +291,11 @@ object KernelPatchStore {
                 )
             }
 
-            if (asset.size >= 0L && destination.length() != asset.size) {
+            val actualSize = destination.length()
+            if (asset.size >= 0L && actualSize != asset.size) {
                 destination.delete()
                 throw SecurityException(
-                    "Size mismatch for ${asset.name}: expected ${asset.size}, got ${destination.length()}"
+                    "Size mismatch for ${asset.name}: expected ${asset.size}, got $actualSize"
                 )
             }
         }
