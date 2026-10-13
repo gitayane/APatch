@@ -1,5 +1,6 @@
 package me.bmax.apatch.ui.screen
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -226,6 +227,11 @@ fun KernelPatchManagerScreen(navigator: DestinationsNavigator) {
                                             } catch (e: kotlinx.coroutines.CancellationException) {
                                                 throw e
                                             } catch (e: Exception) {
+                                                Log.e(
+                                                    "KernelPatchManager",
+                                                    "Failed to activate KernelPatch ${release.tag}",
+                                                    e
+                                                )
                                                 error = e.message ?: e.toString()
                                             } finally {
                                                 installingTag = null
