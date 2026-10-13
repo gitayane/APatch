@@ -19,7 +19,10 @@ object KernelPatchStore {
 
     private const val TAG = "KernelPatchStore"
     private const val API_URL =
-        "https://api.github.com/repos/gitayane/KernelPatch/releases?per_page=30"
+        "https://api.github.com/repos/gitayane/KernelPatch/releases"
+    private const val RELEASES_PER_PAGE = 100
+    private const val MAX_RELEASE_PAGES = 5
+    private const val MAX_RELEASES_PER_CHANNEL = 3
     private const val STORE_DIR = "kernelpatch"
     private const val ACTIVE_DIR = "active"
     private const val META_FILE = "metadata.json"
