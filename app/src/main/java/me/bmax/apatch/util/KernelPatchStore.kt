@@ -19,10 +19,7 @@ object KernelPatchStore {
 
     private const val TAG = "KernelPatchStore"
     private const val API_URL =
-        "https://api.github.com/repos/gitayane/KernelPatch/releases"
-    private const val RELEASES_PER_PAGE = 100
-    private const val MAX_RELEASE_PAGES = 5
-    private const val MAX_RELEASES_PER_CHANNEL = 3
+        "https://api.github.com/repos/gitayane/KernelPatch/releases?per_page=30"
     private const val STORE_DIR = "kernelpatch"
     private const val ACTIVE_DIR = "active"
     private const val META_FILE = "metadata.json"
@@ -97,9 +94,8 @@ object KernelPatchStore {
         active()?.compileTime?.takeIf { it.isNotBlank() }
 
     suspend fun fetch(channel: Channel): List<Release> = withContext(Dispatchers.IO) {
-        // GitHub caps a release page at 100 entries. Keep paging only until we
-        // have enough valid releases for this channel, with a hard page limit
-        // to avoid excessive requests if one channel has very few releases.
+        // GitHub caps a release page at 100 entries. Page only as far as needed
+        // to find three compatible releases for the selected channel.
         val result = ArrayList<Release>(MAX_RELEASES_PER_CHANNEL)
         var page = 1
 
@@ -152,4 +148,193 @@ object KernelPatchStore {
         result.sortedByDescending { it.publishedAt }.take(MAX_RELEASES_PER_CHANNEL)
     }
 
+    suspend fun activate(release: Release, channel: Channel): Active =
+        withContext(Dispatchers.IO) {
+            activationMutex.withLock {
+                ensureDirectory(rootDir, "KernelPatch store")
 
+                // A timestamp is not unique: two fast taps can start in the same
+                // millisecond and one activation may delete the other's directory.
+                val staging = File(rootDir, ".staging-${UUID.randomUUID()}")
+                ensureDirectory(staging, "KernelPatch staging")
+
+                // Keep the current active KP until the complete new release has been
+                // downloaded, verified, inspected, and staged successfully.
+                val previous = File(rootDir, ".active-old-${UUID.randomUUID()}")
+
+                try {
+                    val kpimg = File(staging, "kpimg")
+                    val kptools = File(staging, "kptools")
+
+                    downloadAndVerify(release.kpimg, kpimg)
+                    downloadAndVerify(release.kptools, kptools)
+
+                    if (!kpimg.setExecutable(true, false)) {
+                        throw IOException("Failed to mark downloaded kpimg executable: ${kpimg.absolutePath}")
+                    }
+                    if (!kptools.setExecutable(true, false)) {
+                        throw IOException("Failed to mark downloaded kptools executable: ${kptools.absolutePath}")
+                    }
+
+                    val info = readKpimgInfo(kpimg, kptools)
+                    val active = Active(
+                        channel = channel,
+                        tag = release.tag,
+                        name = release.name,
+                        kpVersion = info.version,
+                        compileTime = info.compileTime,
+                        kpimgSha256 = release.kpimg.sha256,
+                        kptoolsSha256 = release.kptools.sha256,
+                    )
+
+                    File(staging, META_FILE).writeText(
+                        JSONObject()
+                            .put("channel", active.channel.name)
+                            .put("tag", active.tag)
+                            .put("name", active.name)
+                            .put("kpVersion", active.kpVersion)
+                            .put("compileTime", active.compileTime)
+                            .put("kpimgSha256", active.kpimgSha256)
+                            .put("kptoolsSha256", active.kptoolsSha256)
+                            .toString(2)
+                    )
+
+                    var movedPrevious = false
+                    if (activeDir.exists()) {
+                        if (!activeDir.renameTo(previous)) {
+                            throw IOException("Failed to preserve the currently active KernelPatch")
+                        }
+                        movedPrevious = true
+                    }
+
+                    if (!staging.renameTo(activeDir)) {
+                        if (movedPrevious && !previous.renameTo(activeDir)) {
+                            throw IOException(
+                                "Failed to activate KernelPatch and failed to restore the previous KP"
+                            )
+                        }
+                        throw IOException("Failed to activate KernelPatch assets")
+                    }
+
+                    previous.deleteRecursively()
+                    Log.i(TAG, "activated ${active.tag} (${active.compileTime})")
+                    active
+                } finally {
+                    staging.deleteRecursively()
+                    // If restoring the previous active KP failed, leave the backup
+                    // directory in place for recovery instead of deleting it here.
+                }
+            }
+        }
+
+    private fun ensureDirectory(directory: File, purpose: String) {
+        if (!directory.isDirectory && !directory.mkdirs() && !directory.isDirectory) {
+            throw IOException("Failed to create $purpose directory: ${directory.absolutePath}")
+        }
+    }
+
+    fun clearActive() {
+        activeDir.deleteRecursively()
+    }
+
+    private fun parseAssets(array: JSONArray): Map<String, Asset> {
+        val result = HashMap<String, Asset>()
+        for (i in 0 until array.length()) {
+            val json = array.getJSONObject(i)
+            val name = json.optString("name")
+            val digest = json.optString("digest")
+            val url = json.optString("browser_download_url")
+            if (name.isBlank() || url.isBlank() || !digest.startsWith("sha256:")) continue
+            result[name] = Asset(
+                name = name,
+                url = url,
+                sha256 = digest.removePrefix("sha256:"),
+                size = json.optLong("size", -1L),
+            )
+        }
+        return result
+    }
+
+    private fun downloadAndVerify(asset: Asset, destination: File) {
+        val parent = destination.parentFile
+            ?: throw IOException("No parent directory for download target: ${destination.absolutePath}")
+        ensureDirectory(parent, "download target for ${asset.name}")
+
+        val request = okhttp3.Request.Builder()
+            .url(asset.url)
+            .header("Accept", "application/octet-stream")
+            .build()
+
+        apApp.okhttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("Download ${asset.name} failed: HTTP ${response.code}")
+            }
+
+            val body = response.body ?: throw IllegalStateException("Empty ${asset.name}")
+            val digest = MessageDigest.getInstance("SHA-256")
+
+            val target = try {
+                destination.outputStream().buffered()
+            } catch (e: IOException) {
+                throw IOException(
+                    "Cannot create download target ${destination.absolutePath}; " +
+                        "parent exists=${parent.isDirectory}",
+                    e
+                )
+            }
+
+            target.use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            if (!actual.equals(asset.sha256, ignoreCase = true)) {
+                destination.delete()
+                throw SecurityException(
+                    "SHA-256 mismatch for ${asset.name}: expected ${asset.sha256}, got $actual"
+                )
+            }
+
+            val actualSize = destination.length()
+            if (asset.size >= 0L && actualSize != asset.size) {
+                destination.delete()
+                throw SecurityException(
+                    "Size mismatch for ${asset.name}: expected ${asset.size}, got $actualSize"
+                )
+            }
+        }
+    }
+
+    private data class KpimgInfo(
+        val version: String,
+        val compileTime: String
+    )
+
+    private fun readKpimgInfo(kpimg: File, kptools: File): KpimgInfo {
+        val result = rootShellForResult(
+            "\"${kptools.absolutePath}\" -l -k \"${kpimg.absolutePath}\""
+        )
+        if (!result.isSuccess) {
+            throw IllegalStateException(
+                "Failed to inspect kpimg: ${result.err.joinToString("\n")}"
+            )
+        }
+
+        val ini = Ini(StringReader(result.out.joinToString("\n")))
+        val section = ini["kpimg"]
+            ?: throw IllegalStateException("Downloaded kpimg has no [kpimg] section")
+
+        return KpimgInfo(
+            version = section["version"]?.toString().orEmpty(),
+            compileTime = section["compile_time"]?.toString().orEmpty()
+        )
+    }
+}
