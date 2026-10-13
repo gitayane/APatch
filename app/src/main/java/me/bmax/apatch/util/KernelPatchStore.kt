@@ -97,12 +97,14 @@ object KernelPatchStore {
         active()?.compileTime?.takeIf { it.isNotBlank() }
 
     suspend fun fetch(channel: Channel): List<Release> = withContext(Dispatchers.IO) {
-        // GitHub caps a release page at 100 entries. Page only as far as needed
-        // to find three compatible releases for the selected channel.
-        val result = ArrayList<Release>(MAX_RELEASES_PER_CHANNEL)
+        // GitHub's release endpoint isn't guaranteed to be ordered by published_at.
+        // Scan bounded pages, then sort locally so channel filtering doesn't let a
+        // busy Test channel hide older-page Stable releases (or vice versa).
+        val result = ArrayList<Release>()
         var page = 1
+        var pageSize: Int
 
-        while (page <= MAX_RELEASE_PAGES && result.size < MAX_RELEASES_PER_CHANNEL) {
+        while (page <= MAX_RELEASE_PAGES) {
             val response = apApp.okhttpClient.newCall(
                 okhttp3.Request.Builder()
                     .url("$API_URL?per_page=$RELEASES_PER_PAGE&page=$page")
@@ -117,10 +119,7 @@ object KernelPatchStore {
 
                 val body = it.body?.string().orEmpty()
                 val releases = JSONArray(body)
-                if (releases.length() == 0) {
-                    return@withContext result.sortedByDescending { release -> release.publishedAt }
-                        .take(MAX_RELEASES_PER_CHANNEL)
-                }
+                pageSize = releases.length()
 
                 for (i in 0 until releases.length()) {
                     val json = releases.getJSONObject(i)
@@ -145,6 +144,10 @@ object KernelPatchStore {
                 }
             }
 
+            // A short page means there are no more releases. Otherwise continue
+            // within MAX_RELEASE_PAGES, even if three matches have been found,
+            // because the API page order does not reliably reflect published_at.
+            if (pageSize < RELEASES_PER_PAGE) break
             page++
         }
 
